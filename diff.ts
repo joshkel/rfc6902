@@ -127,18 +127,19 @@ function isArrayRemove(array_operation: ArrayOperation): array_operation is Arra
 }
 
 interface DynamicAlternative {
-  operations: ArrayOperation[]
+  operation: ArrayOperation
   /**
   cost indicates the total cost of getting to this position.
   */
   cost: number
+  base?: DynamicAlternative
 }
 
-function appendArrayOperation(base: DynamicAlternative, operation: ArrayOperation): DynamicAlternative {
+function appendArrayOperation(base: DynamicAlternative | undefined, operation: ArrayOperation): DynamicAlternative {
   return {
-    // the new operation must be pushed on the end
-    operations: base.operations.concat(operation),
-    cost: base.cost + 1,
+    operation,
+    cost: !base ? 1 : base.cost + 1,
+    base,
   }
 }
 
@@ -152,6 +153,15 @@ function findLowestCost(items: DynamicAlternative[]) {
     }
   }
   return best!
+}
+
+function getOperationsArray(item: DynamicAlternative | undefined): ArrayOperation[] {
+  const operations: ArrayOperation[] = []
+  while (item) {
+    operations.push(item.operation)
+    item = item.base
+  }
+  return operations.reverse()
 }
 
 /**
@@ -185,8 +195,8 @@ resulting in an array of 'remove' operations.
 export function diffArrays<T>(input: T[], output: T[], ptr: Pointer, diff: Diff = diffAny): Operation[] {
   // set up cost matrix (very simple initialization: just a map)
   const max_length = Math.max(input.length, output.length)
-  const memo = new Map<number, DynamicAlternative>(
-    [[0, {operations: [], cost: 0}]],
+  const memo = new Map<number, DynamicAlternative | undefined>(
+    [[0, undefined]],
   );
   /**
   Calculate the cheapest sequence of operations required to get from
@@ -258,7 +268,7 @@ export function diffArrays<T>(input: T[], output: T[], ptr: Pointer, diff: Diff 
   // properties by using 0 for everything but positive numbers
   const input_length = (isNaN(input.length) || input.length <= 0) ? 0 : input.length
   const output_length = (isNaN(output.length) || output.length <= 0) ? 0 : output.length
-  const array_operations = dist(input_length, output_length).operations
+  const array_operations = getOperationsArray(dist(input_length, output_length))
   const [padded_operations] = array_operations.reduce<[Operation[], number]>(([operations, padding], array_operation) => {
     if (isArrayAdd(array_operation)) {
       const padded_index = array_operation.index + 1 + padding
