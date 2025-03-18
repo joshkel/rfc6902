@@ -176,23 +176,15 @@
   @returns Array of keys that are in `minuend` but not in `subtrahend`.
   */
   function subtract(minuend, subtrahend) {
-      // initialize empty object; we only care about the keys, the values can be anything
-      const obj = {};
-      // build up obj with all the properties of minuend
-      for (const add_key in minuend) {
-          if (hasOwnProperty.call(minuend, add_key) && minuend[add_key] !== undefined) {
-              obj[add_key] = 1;
+      const keys = [];
+      for (const key in minuend) {
+          if (hasOwnProperty.call(minuend, key) &&
+              minuend[key] !== undefined &&
+              !(hasOwnProperty.call(subtrahend, key) && subtrahend[key] !== undefined)) {
+              keys.push(key);
           }
       }
-      // now delete all the properties of subtrahend from obj
-      // (deleting a missing key has no effect)
-      for (const del_key in subtrahend) {
-          if (hasOwnProperty.call(subtrahend, del_key) && subtrahend[del_key] !== undefined) {
-              delete obj[del_key];
-          }
-      }
-      // finally, extract whatever keys remain in obj
-      return Object.keys(obj);
+      return keys;
   }
   /**
   List the keys that shared by all `objects`.
@@ -202,27 +194,17 @@
   @param objects Array of objects to compare
   @returns Array of keys that are in ("own-properties" of) every object in `objects`.
   */
-  function intersection(objects) {
-      const length = objects.length;
-      // prepare empty counter to keep track of how many objects each key occurred in
-      const counter = {};
-      // go through each object and increment the counter for each key in that object
-      for (let i = 0; i < length; i++) {
-          const object = objects[i];
-          for (const key in object) {
-              if (hasOwnProperty.call(object, key) && object[key] !== undefined) {
-                  counter[key] = (counter[key] || 0) + 1;
-              }
+  function intersection(a, b) {
+      const keys = [];
+      for (const key in a) {
+          if (hasOwnProperty.call(a, key) &&
+              a[key] !== undefined &&
+              hasOwnProperty.call(b, key) &&
+              b[key] !== undefined) {
+              keys.push(key);
           }
       }
-      // now delete all keys from the counter that were not seen in every object
-      for (const key in counter) {
-          if (counter[key] < length) {
-              delete counter[key];
-          }
-      }
-      // finally, extract whatever keys remain in the counter
-      return Object.keys(counter);
+      return keys;
   }
   function isArrayAdd(array_operation) {
       return array_operation.op === 'add';
@@ -397,7 +379,7 @@
           operations.push({ op: 'add', path: ptr.add(key).toString(), value: output[key] });
       });
       // if a key is in both, diff it recursively
-      intersection([input, output]).forEach(key => {
+      intersection(input, output).forEach(key => {
           operations.push(...diff(input[key], output[key], ptr.add(key)));
       });
       return operations;
