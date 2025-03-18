@@ -142,6 +142,18 @@ function appendArrayOperation(base: DynamicAlternative, operation: ArrayOperatio
   }
 }
 
+function findLowestCost(items: DynamicAlternative[]) {
+  let bestCost = Infinity;
+  let best: DynamicAlternative | undefined;
+  for (const item of items) {
+    if (item.cost < bestCost) {
+      bestCost = item.cost
+      best = item
+    }
+  }
+  return best!
+}
+
 /**
 Calculate the shortest sequence of operations to get from `input` to `output`,
 using a dynamic programming implementation of the Levenshtein distance algorithm.
@@ -172,9 +184,10 @@ resulting in an array of 'remove' operations.
 */
 export function diffArrays<T>(input: T[], output: T[], ptr: Pointer, diff: Diff = diffAny): Operation[] {
   // set up cost matrix (very simple initialization: just a map)
-  const memo: {[index: string]: DynamicAlternative} = {
-    '0,0': {operations: [], cost: 0},
-  }
+  const max_length = Math.max(input.length, output.length)
+  const memo = new Map<number, DynamicAlternative>(
+    [[0, {operations: [], cost: 0}]],
+  );
   /**
   Calculate the cheapest sequence of operations required to get from
   input.slice(0, i) to output.slice(0, j).
@@ -187,8 +200,8 @@ export function diffArrays<T>(input: T[], output: T[], ptr: Pointer, diff: Diff 
   */
   function dist(i: number, j: number): DynamicAlternative {
     // memoized
-    const memo_key = `${i},${j}`
-    let memoized = memo[memo_key]
+    const memo_key = i * max_length + j;
+    let memoized = memo.get(memo_key)
     if (memoized === undefined) {
       // TODO: this !diff(...).length usage could/should be lazy
       if (i > 0 && j > 0 && !diff(input[i - 1], output[j - 1], ptr.add(String(i - 1))).length) {
@@ -234,12 +247,10 @@ export function diffArrays<T>(input: T[], output: T[], ptr: Pointer, diff: Diff 
         // the only other case, i === 0 && j === 0, has already been memoized
 
         // the meat of the algorithm:
-        // sort by cost to find the lowest one (might be several ties for lowest)
-        // [4, 6, 7, 1, 2].sort((a, b) => a - b) -> [ 1, 2, 4, 6, 7 ]
-        const best = alternatives.sort((a, b) => a.cost - b.cost)[0]
-        memoized = best
+        // find the lowest cost (might be several ties for lowest)
+        memoized = findLowestCost(alternatives)
       }
-      memo[memo_key] = memoized
+      memo.set(memo_key, memoized)
     }
     return memoized
   }
