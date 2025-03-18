@@ -24,7 +24,7 @@
   I say "lower order" because '/' needs escaping due to the JSON Pointer serialization technique.
   Whereas, '~' is escaped because escaping '/' uses the '~' character.
   */
-  function unescape(token) {
+  function unescapeToken(token) {
       return token.replace(/~1/g, '/').replace(/~0/g, '~');
   }
   /** Escape token part of a JSON Pointer string
@@ -33,9 +33,9 @@
   > needs to be encoded as '~1' when these characters appear in a
   > reference token.
 
-  This is the exact inverse of `unescape()`, so the reverse replacements must take place in reverse order.
+  This is the exact inverse of `unescapeToken()`, so the reverse replacements must take place in reverse order.
   */
-  function escape(token) {
+  function escapeToken(token) {
       return token.replace(/~/g, '~0').replace(/\//g, '~1');
   }
   /**
@@ -49,13 +49,13 @@
       `path` *must* be a properly escaped string.
       */
       static fromJSON(path) {
-          const tokens = path.split('/').map(unescape);
+          const tokens = path.split('/').map(unescapeToken);
           if (tokens[0] !== '')
               throw new Error(`Invalid JSON Pointer: ${path}`);
           return new Pointer(tokens);
       }
       toString() {
-          return this.tokens.map(escape).join('/');
+          return this.tokens.map(escapeToken).join('/');
       }
       /**
       Returns an object with 'parent', 'key', and 'value' properties.
@@ -232,10 +232,29 @@
   }
   function appendArrayOperation(base, operation) {
       return {
-          // the new operation must be pushed on the end
-          operations: base.operations.concat(operation),
-          cost: base.cost + 1,
+          operation,
+          cost: !base ? 1 : base.cost + 1,
+          base,
       };
+  }
+  function findLowestCost(items) {
+      let bestCost = Infinity;
+      let best;
+      for (const item of items) {
+          if (item.cost < bestCost) {
+              bestCost = item.cost;
+              best = item;
+          }
+      }
+      return best;
+  }
+  function getOperationsArray(item) {
+      const operations = [];
+      while (item) {
+          operations.push(item.operation);
+          item = item.base;
+      }
+      return operations.reverse();
   }
   /**
   Calculate the shortest sequence of operations to get from `input` to `output`,
@@ -267,9 +286,8 @@
   */
   function diffArrays(input, output, ptr, diff = diffAny) {
       // set up cost matrix (very simple initialization: just a map)
-      const memo = {
-          '0,0': { operations: [], cost: 0 },
-      };
+      const max_length = Math.max(input.length, output.length);
+      const memo = new Map([[0, undefined]]);
       /**
       Calculate the cheapest sequence of operations required to get from
       input.slice(0, i) to output.slice(0, j).
@@ -282,8 +300,8 @@
       */
       function dist(i, j) {
           // memoized
-          const memo_key = `${i},${j}`;
-          let memoized = memo[memo_key];
+          const memo_key = i * max_length + j;
+          let memoized = memo.get(memo_key);
           if (memoized === undefined) {
               // TODO: this !diff(...).length usage could/should be lazy
               if (i > 0 && j > 0 && !diff(input[i - 1], output[j - 1], ptr.add(String(i - 1))).length) {
@@ -328,12 +346,10 @@
                   }
                   // the only other case, i === 0 && j === 0, has already been memoized
                   // the meat of the algorithm:
-                  // sort by cost to find the lowest one (might be several ties for lowest)
-                  // [4, 6, 7, 1, 2].sort((a, b) => a - b) -> [ 1, 2, 4, 6, 7 ]
-                  const best = alternatives.sort((a, b) => a.cost - b.cost)[0];
-                  memoized = best;
+                  // find the lowest cost (might be several ties for lowest)
+                  memoized = findLowestCost(alternatives);
               }
-              memo[memo_key] = memoized;
+              memo.set(memo_key, memoized);
           }
           return memoized;
       }
@@ -341,7 +357,7 @@
       // properties by using 0 for everything but positive numbers
       const input_length = (isNaN(input.length) || input.length <= 0) ? 0 : input.length;
       const output_length = (isNaN(output.length) || output.length <= 0) ? 0 : output.length;
-      const array_operations = dist(input_length, output_length).operations;
+      const array_operations = getOperationsArray(dist(input_length, output_length));
       const [padded_operations] = array_operations.reduce(([operations, padding], array_operation) => {
           if (isArrayAdd(array_operation)) {
               const padded_index = array_operation.index + 1 + padding;
@@ -527,7 +543,7 @@
       else if (endpoint.value === undefined) {
           return new MissingError(operation.path);
       }
-      endpoint.parent[endpoint.key] = operation.value;
+      endpoint.parent[endpoint.key] = clone(operation.value);
       return null;
   }
   /**
