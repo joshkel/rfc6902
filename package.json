@@ -29,5 +29,8 @@
     "posttest": "nyc report --reporter=text-lcov | coveralls || true",
     "dist": "tsc -t ES2015 -m es2015 && rollup index.js --output.format umd --name rfc6902 --output.file dist/rfc6902.js && closure-compiler dist/rfc6902.js > dist/rfc6902.min.js",
     "clean": "tsc -b . test --clean"
+  },
+  "dependencies": {
+    "fast-deep-equal": "^3.1.3"
   }
 }

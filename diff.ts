@@ -1,3 +1,4 @@
+import fastDeepEqual from 'fast-deep-equal';
 import {Pointer} from './pointer' // we only need this for type inference
 import {hasOwnProperty, objectType} from './util'
 
@@ -179,6 +180,7 @@ resulting in an array of 'remove' operations.
 @returns A list of add/remove/replace operations.
 */
 export function diffArrays<T>(input: T[], output: T[], ptr: Pointer, diff: Diff = diffAny): Operation[] {
+  const isSame = diff === diffAny ? fastDeepEqual : (input: any, output: any, ptr: Pointer) => !diff(input, output, ptr).length;
   // set up cost matrix (very simple initialization: just a map)
   const max_length = Math.max(input.length, output.length)
   const memo = new Map<number, DynamicAlternative | undefined>(
@@ -199,8 +201,7 @@ export function diffArrays<T>(input: T[], output: T[], ptr: Pointer, diff: Diff 
     const memo_key = i * max_length + j;
     let memoized = memo.get(memo_key)
     if (memoized === undefined) {
-      // TODO: this !diff(...).length usage could/should be lazy
-      if (i > 0 && j > 0 && !diff(input[i - 1], output[j - 1], ptr.add(String(i - 1))).length) {
+      if (i > 0 && j > 0 && isSame(input[i - 1], output[j - 1], ptr.add(String(i - 1)))) {
         // equal (no operations => no cost)
         memoized = dist(i - 1, j - 1)
       }
@@ -324,7 +325,7 @@ that would transform `input` into `output`.
 > o  literals (false, true, and null): are considered equal if they are
 >    the same.
 */
-export function diffAny(input: any, output: any, ptr: Pointer, diff: Diff = diffAny): Operation[] {
+export function diffAny(input: any, output: any, ptr: Pointer, diff?: Diff): Operation[] {
   // strict equality handles literals, numbers, and strings (a sufficient but not necessary cause)
   if (input === output) {
     return []

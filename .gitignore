@@ -1,5 +1,7 @@
 *.js
 *.d.ts
 coverage/
+.nyc_output/
+node_modules/
 package-lock.json
 !dist/*.js
